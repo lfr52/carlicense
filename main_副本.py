@@ -23,18 +23,20 @@ def find_car_brod():
     image_gray = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
     watches = watch_cascade.detectMultiScale(image_gray, 1.2, 2, minSize=(36, 9), maxSize=(36 * 40, 9 * 40))
 
-    print("检测到车牌数", len(watches))
-    for (x, y, w, h) in watches:
-        cv2.rectangle(image, (x, y), (x + w, y + h), (0, 0, 255), 1)
-        cut_img = image[y :y + h, x :x  + w]  # 裁剪坐标为[y0:y1, x0:x1]
-        cut_gray = cv2.cvtColor(cut_img, cv2.COLOR_RGB2GRAY)
+    watch = watches[0] 
 
-        cv2.imwrite(f"./cut_1/{car}.jpg", cut_gray)
-        im = Image.open(f"./cut_1/{car}.jpg")
-        size = 720, 180
-        mmm = im.resize(size, Image.ANTIALIAS)
-        mmm.save(f"./cut_1/{car}.jpg", "JPEG", quality=90)
-        break
+    x, y, w, h = watch # [ 140  281 1131  288]
+    print(watch)
+    # cv2.rectangle(image, (x, y), (x + w, y + h), (0, 0, 255), 1)
+    cut_img = image[y + 3 :y + h - 3, x :x  + w - 4]  # 裁剪坐标为[y0:y1, x0:x1]
+    cut_gray = cv2.cvtColor(cut_img, cv2.COLOR_RGB2GRAY)
+
+    cv2.imwrite(f"./cut_1/{car}.jpg", cut_gray)
+    im = Image.open(f"./cut_1/{car}.jpg")
+    size = 720, 180
+    mmm = im.resize(size, Image.ANTIALIAS)
+    mmm.save(f"./cut_1/{car}.jpg", "JPEG", quality=90)
+
 
 
 '''
@@ -84,7 +86,7 @@ def cut_car_num_for_chart():
     if black_max > white_max:
         arg = True
 
-    n = 1
+    n = 20
     start = 1
     end = 2
     temp = 1
@@ -96,11 +98,14 @@ def cut_car_num_for_chart():
             # 0.05这个参数需多调整，对应下面的0.95
             start = n
             end = find_end(start, white, black, arg, white_max, black_max, width)
-            n = end
-            # shutil.copy()函数是当检测到这个所谓的 1 时，从样本库中拷贝一张 1 的图片给当前temp下标下的字符
-            if end - start > 5 and temp <= 9:   # 移除车牌白条
+            if temp > 3:
+                n = max(end, n + w - 1)
+            else:
+                n = end
+            if end - start > 5 and temp < 9:   # 移除车牌白条
                 print(" end - start" + str(end - start))
-                if temp == 1:
+                print(start, end, n)
+                if temp == 1 and end - start > 30:
 
                     w = end - start
                     cj = th3[1:height, start:start + w]
