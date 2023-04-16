@@ -10,7 +10,8 @@ import numpy as np
 
 from pip._vendor.distlib._backport import shutil
 
-car = 'car3'
+car = 'car1'
+
 
 def find_car_brod():
     watch_cascade = cv2.CascadeClassifier('./cascade.xml')
@@ -23,12 +24,12 @@ def find_car_brod():
     image_gray = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
     watches = watch_cascade.detectMultiScale(image_gray, 1.2, 2, minSize=(36, 9), maxSize=(36 * 40, 9 * 40))
 
-    watch = watches[0] 
+    watch = watches[0]
 
-    x, y, w, h = watch # [ 140  281 1131  288]
+    x, y, w, h = watch  # [ 140  281 1131  288]
     print(watch)
     # cv2.rectangle(image, (x, y), (x + w, y + h), (0, 0, 255), 1)
-    cut_img = image[y + 3 :y + h - 3, x :x  + w - 4]  # 裁剪坐标为[y0:y1, x0:x1]
+    cut_img = image[y + 3:y + h - 3, x:x + w - 4]  # 裁剪坐标为[y0:y1, x0:x1]
     cut_gray = cv2.cvtColor(cut_img, cv2.COLOR_RGB2GRAY)
 
     cv2.imwrite(f"./cut_1/{car}.jpg", cut_gray)
@@ -38,11 +39,38 @@ def find_car_brod():
     mmm.save(f"./cut_1/{car}.jpg", "JPEG", quality=90)
 
 
-
 '''
 
 剪切后车牌的字符单个拆分保存处理
 '''
+
+
+def cut_carlicense(img):
+    white = []  # 记录每一行的白色像素总和
+    black = []  # ..........黑色.......
+    height = img.shape[0]
+    width = img.shape[1]
+    # 计算每一行的黑白色像素总和
+    for i in range(height):
+        s = 0  # 这一行白色总数
+        t = 0  # 这一行黑色总数
+        for j in range(width):
+            if img[i][j] == 255:
+                s += 1
+            if img[i][j] == 0:
+                t += 1
+
+        white.append(s)
+        black.append(t)
+    i = height
+    while i > 0:
+        if white[i - 1] < 550:
+            break
+        i -= 1
+    img = img[0:i - 1, :]
+    img = cv2.resize(img, (width, height))
+
+    return img
 
 
 def cut_car_num_for_chart():
@@ -57,7 +85,8 @@ def cut_car_num_for_chart():
     _, th3 = cv2.threshold(blur, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
 
     # cv2.imshow('threshold', th3)
-    cv2.imwrite(f'./cut_1/{car}_binary.jpg', th3)
+    th3 = cut_carlicense(th3)
+    cv2.imwrite(f'./cut_1/{car}_binary_416.jpg', th3)
     # cv2.waitKey(0)
 
     # 分割字符
@@ -82,17 +111,20 @@ def cut_car_num_for_chart():
         black.append(t)
         print(i, str(s) + "---------------" + str(t))
     print("blackmax ---->" + str(black_max) + "------whitemax ------> " + str(white_max))
-    arg = False  # False表示白底黑字；True表示黑底白字
-    if black_max > white_max:
-        arg = True
+    arg = True  # False表示白底黑字；True表示黑底白字
+    if black_max < white_max:
+        arg = False
 
     n = 20
     start = 1
     end = 2
     temp = 1
     w = 0
-    while n < width - 2:
+    start_5 = 0
+    while n < width - 1:
         n += 1
+        if temp == 5:
+            break
         if (white[n] if arg else black[n]) > (0.05 * white_max + 1 if arg else 0.05 * black_max):
             # 上面这些判断用来辨别是白底黑字还是黑底白字
             # 0.05这个参数需多调整，对应下面的0.95
@@ -102,50 +134,63 @@ def cut_car_num_for_chart():
                 n = max(end, n + w - 1)
             else:
                 n = end
-            if end - start > 5 and temp < 9:   # 移除车牌白条
+            if end - start > 7 and temp < 9:  # 移除车牌白条
                 print(" end - start" + str(end - start))
                 print(start, end, n)
-                if temp == 1 and end - start > 30:
+                if temp == 1 and end - start > 30:  # 汉字
 
                     w = end - start
                     cj = th3[1:height, start:start + w]
-                    cv2.imwrite(f"./cut_1\img_cut_initial\\{car}_" + str(temp) + ".jpg", cj)
-
-                    im = Image.open(f"./cut_1\img_cut_initial\\{car}_" + str(temp) + ".jpg")
-                    size = 32, 40
-                    mmm = im.resize(size, Image.ANTIALIAS)
-                    mmm.save(f"./cut_1\img_cut\\{car}_" + str(temp) + ".jpg", quality=95)
+                    save_pic(f"./cut_1\img_cut_initial_416\\{car}_" + str(temp) + ".jpg",
+                             f"./cut_1\img_cut_416\\{car}_" + str(temp) + ".jpg",
+                             cj)
                     temp = temp + 1
                     pass
-                elif temp == 3:
-                    
-                    cj = th3[1:height, start:end]
-                    cv2.imwrite(f"./cut_1\img_cut_initial\\{car}_" + str(temp) + ".jpg", cj)
+                elif temp == 3:  # 点
 
-                    im = Image.open(f"./cut_1\img_cut_initial\\{car}_" + str(temp) + ".jpg")
-                    size = 32, 40
-                    mmm = im.resize(size, Image.ANTIALIAS)
-                    mmm.save(f"./cut_1\img_cut\\{car}_" + str(temp) + ".bmp", quality=95)
+                    cj = th3[1:height, start:end]
+                    save_pic(f"./cut_1\img_cut_initial_416\\{car}_" + str(temp) + ".jpg",
+                             f"./cut_1\img_cut_416\\{car}_" + str(temp) + ".jpg",
+                             cj)
                     temp = temp + 1
                     pass
                 else:
                     cj = th3[1:height, start:start + w]
-                    cv2.imwrite(f"./cut_1\img_cut_initial\\{car}_" + str(temp) + ".jpg", cj)
-
-                    im = Image.open(f"./cut_1\img_cut_initial\\{car}_" + str(temp) + ".jpg")
-                    size = 32, 40
-                    mmm = im.resize(size, Image.ANTIALIAS)
-                    mmm.save(f"./cut_1\img_cut\\{car}_" + str(temp) + ".jpg", quality=95)
+                    start_5 = start + w
+                    save_pic(f"./cut_1\img_cut_initial_416\\{car}_" + str(temp) + ".jpg",
+                             f"./cut_1\img_cut_416\\{car}_" + str(temp) + ".jpg",
+                             cj)
                     temp = temp + 1
+    w_2 = w + 24
+    start_5 = int(start_5 + (w_2 - w)/2)
+    while temp < 9:
+        end_5 = min(start_5 + w_2, width - 1)
+        cj = th3[1:height, start_5:end_5]
+        save_pic(f"./cut_1\img_cut_initial_416\\{car}_" + str(temp) + ".jpg",
+                 f"./cut_1\img_cut_416\\{car}_" + str(temp) + ".jpg",
+                 cj)
+        start_5 = end_5
+        temp = temp + 1
+
+
+
+def save_pic(path, path2, img):
+    cv2.imwrite(path, img)
+
+    im = Image.open(path)
+    size = 32, 40
+    mmm = im.resize(size, Image.ANTIALIAS)
+    mmm.save(path2, quality=95)
 
 
 # 分割图像
 def find_end(start_, white, black, arg, white_max, black_max, width):
     end_ = start_ + 1
-    for m in range(start_ + 1, width -1):
-        if m == width -2:
-            return width -1
-        if (black[m] if arg else white[m]) > (0.95 * black_max - 2 if arg else 0.95 * white_max):  # 0.95这个参数需多调整，对应上面的0.05
+    for m in range(start_ + 1, width - 1):
+        if m == width - 2:
+            return width - 1
+        if (black[m] if arg else white[m]) > (
+                0.95 * black_max - 2 if arg else 0.95 * white_max):  # 0.95这个参数需多调整，对应上面的0.05
             end_ = m
             break
     return end_
@@ -153,4 +198,4 @@ def find_end(start_, white, black, arg, white_max, black_max, width):
 
 # find_car_brod()   #车牌定位裁剪
 
-cut_car_num_for_chart() #二值化处理裁剪成单个字符
+cut_car_num_for_chart()  # 二值化处理裁剪成单个字符
